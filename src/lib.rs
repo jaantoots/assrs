@@ -1,14 +1,34 @@
 use pyo3::prelude::*;
 
-/// Formats the sum of two numbers as string.
+use crate::bktree::BKTreeLevenshtein;
+use crate::trie::Trie;
+
+mod automaton;
+mod bktree;
+mod levenshtein;
+mod trie;
+
 #[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
+fn levenshtein_extract(a: &str, b: Vec<&str>) -> (usize, usize) {
+    let mut best = usize::MAX;
+    let mut idx = 0;
+    let mut current;
+    for (i, choice) in b.iter().enumerate() {
+        current = levenshtein::levenshtein(a, choice);
+        if current < best {
+            best = current;
+            idx = i;
+        }
+    }
+    (best, idx)
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn assrs(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_function(wrap_pyfunction!(levenshtein::levenshtein, m)?)?;
+    m.add_function(wrap_pyfunction!(levenshtein_extract, m)?)?;
+    m.add_class::<BKTreeLevenshtein>()?;
+    m.add_class::<Trie>()?;
     Ok(())
 }
