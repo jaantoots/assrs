@@ -139,23 +139,23 @@ impl LevenshteinAutomaton64State<'_> {
 }
 
 fn levenshtein64(a: &str, b: &str) -> usize {
-    let mut block = HashMap::new();
-    let mut x = 1u64;
-    let mut len = 0;
-    for c in a.chars() {
-        block.entry(c).and_modify(|e| *e |= x).or_insert(x);
-        x <<= 1;
-        len += 1;
-    }
+    let len = a.chars().count() as u32;
     let mut vp = 1u64.checked_shl(len).unwrap_or(0).wrapping_sub(1);
     let mut vn = 0;
     let mut score = len;
     let mask = 1u64 << (len - 1);
 
-    for c in b.chars() {
+    for val in b.chars() {
         // Myers as described by Hyyro
         // Step 1: D0
-        let pm = *block.get(&c).unwrap_or(&0);
+        let mut pm = 0;
+        let mut x = 1u64;
+        for c in a.chars() {
+            if c == val {
+                pm |= x;
+            }
+            x <<= 1;
+        }
         let d0 = (((pm & vp).wrapping_add(vp)) ^ vp) | pm | vn;
         // Step 2-3: HP and HN
         let mut hp = vn | !(d0 | vp);
