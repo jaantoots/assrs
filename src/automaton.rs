@@ -33,14 +33,10 @@ impl<'a> LevenshteinAutomatonState<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
-                    sub = if i == 0 {
-                        sub + 1
+                    sub = if i != 0 && self.m.chars[i - 1] == value {
+                        sub
                     } else {
-                        if self.m.chars[i - 1] == value {
-                            sub
-                        } else {
-                            sub + 1
-                        }
+                        sub + 1
                     };
                     add = sub.min(add + 1).min(x + 1);
                     sub = *x;
