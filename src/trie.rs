@@ -1,8 +1,9 @@
 use pyo3::prelude::*;
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonState};
+
+struct FindResult(usize, Vec<char>);
 
 #[pyclass]
 pub struct Trie {
@@ -23,24 +24,26 @@ impl Trie {
         &self,
         state: &LevenshteinAutomatonState,
         max_edits: usize,
-    ) -> (usize, Cow<'_, str>) {
-        let mut best = usize::MAX;
-        let mut value = "".into();
+    ) -> Option<FindResult> {
+        let mut best = None;
         if !state.can_match(max_edits) {
-            return (best, value);
+            return best;
         }
-        if self.is_terminal {
-            best = best.min(state.distance());
+        let distance = state.distance();
+        if self.is_terminal && distance <= max_edits {
+            best = Some(FindResult(distance, Vec::new()));
         }
         for (next, subtrie) in self.children.iter() {
-            let (distance, tail) =
-                subtrie.find_automaton(&state.step(*next), max_edits.min(best - 1));
-            if distance < best {
-                best = distance;
-                value = (next.to_string() + &tail).into();
-            }
+            // Method returns some iff best is none or distance is lower
+            if let Some(mut result) = subtrie.find_automaton(
+                &state.step(*next),
+                best.as_ref().map_or(max_edits, |x| x.0 - 1),
+            ) {
+                result.1.push(*next);
+                best = Some(result);
+            };
         }
-        (best, value)
+        best
     }
 }
 
@@ -67,11 +70,12 @@ impl Trie {
 
     fn find_one(&self, string: &str, max_edits: Option<usize>) -> Option<String> {
         let automaton = LevenshteinAutomaton::new(string);
-        let (distance, value) =
-            self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX));
-        if distance <= max_edits.unwrap_or(usize::MAX) {
-            return Some(value.to_string());
-        }
-        None
+        Some(
+            self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?
+                .1
+                .iter()
+                .rev()
+                .collect(),
+        )
     }
 }
