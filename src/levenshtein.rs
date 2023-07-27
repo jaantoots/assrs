@@ -8,39 +8,100 @@ pub trait AutomatonState {
 
 pub struct LevenshteinAutomaton<'a> {
     string: &'a str,
+    len: usize,
 }
+
+#[derive(Clone)]
+enum LevenshteinState {
+    Generic(Vec<usize>),
+    Bitvector { vp: u64, vn: u64, offset: usize },
+}
+
+use LevenshteinState::*;
 
 #[derive(Clone)]
 pub struct LevenshteinAutomatonState<'a> {
     m: &'a LevenshteinAutomaton<'a>,
-    row: Vec<usize>,
+    state: LevenshteinState,
 }
 
 impl<'a> LevenshteinAutomaton<'a> {
     pub fn new(string: &'a str) -> Self {
-        Self { string }
+        Self {
+            string,
+            len: string.chars().count(),
+        }
     }
 
     pub fn start(&self) -> LevenshteinAutomatonState {
         LevenshteinAutomatonState {
             m: &self,
-            row: (0..).take(self.string.chars().count() + 1).collect(),
+            state: if self.len <= 64 {
+                LevenshteinState::Bitvector {
+                    vp: 1u64
+                        .checked_shl(self.len as u32)
+                        .unwrap_or(0)
+                        .wrapping_sub(1),
+                    vn: 0,
+                    offset: 0,
+                }
+            } else {
+                LevenshteinState::Generic((0..).take(self.len + 1).collect())
+            },
         }
     }
 }
 
 impl LevenshteinAutomatonState<'_> {
-    pub fn step_mut(&mut self, value: char) {
-        let mut sub = self.row[0];
-        let mut add = sub + 1;
-        let mut del;
-        self.row[0] = add;
-        for (i, c) in self.m.string.chars().enumerate() {
-            del = self.row[i + 1];
-            sub = if c == value { sub } else { sub + 1 };
-            add = sub.min(add + 1).min(del + 1);
-            sub = del;
-            self.row[i + 1] = add;
+    fn step_mut(&mut self, value: char) {
+        match self.state {
+            Generic(ref mut v) => {
+                let mut sub = v[0];
+                let mut add = sub + 1;
+                let mut del;
+                v[0] = add;
+                for (i, c) in self.m.string.chars().enumerate() {
+                    del = v[i + 1];
+                    sub = if c == value { sub } else { sub + 1 };
+                    add = sub.min(add + 1).min(del + 1);
+                    sub = del;
+                    v[i + 1] = add;
+                }
+            }
+            Bitvector {
+                ref mut vp,
+                ref mut vn,
+                ref mut offset,
+            } => {
+                // Myers as described by Hyyro
+                // Step 1: D0
+                let mut pm = 0;
+                let mut x = 1u64;
+                for c in self.m.string.chars() {
+                    if c == value {
+                        pm |= x;
+                    }
+                    x <<= 1;
+                }
+                let d0 = (((pm & *vp).wrapping_add(*vp)) ^ *vp) | pm | *vn;
+                // Step 2-3: HP and HN
+                let mut hp = *vn | !(d0 | *vp);
+                let mut hn = d0 & *vp;
+                // Step 4-5: D[m,j]
+                // if (hp & mask) != 0 {
+                //     score += 1;
+                // }
+                // if (hn & mask) != 0 {
+                //     score -= 1;
+                // }
+                // Step 6-7: VP and VN
+                hp = (hp << 1) | 1;
+                hn = hn << 1;
+
+                *vp = hn | !(d0 | hp);
+                *vn = hp & d0;
+                *offset += 1;
+            }
         }
     }
 }
@@ -53,101 +114,39 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
     }
 
     fn distance(&self) -> usize {
-        *self.row.last().unwrap()
-    }
-
-    fn can_match(&self, max_edits: usize) -> bool {
-        self.row.iter().min().unwrap() <= &max_edits
-    }
-}
-
-pub struct LevenshteinAutomaton64<'a> {
-    string: &'a str,
-    len: u32,
-}
-
-pub struct LevenshteinAutomaton64State<'a> {
-    m: &'a LevenshteinAutomaton64<'a>,
-    vp: u64,
-    vn: u64,
-    offset: usize,
-}
-
-impl<'a> LevenshteinAutomaton64<'a> {
-    pub fn new(string: &'a str) -> Self {
-        Self {
-            string,
-            len: string.chars().count() as u32,
-        }
-    }
-
-    pub fn start(&self) -> LevenshteinAutomaton64State {
-        LevenshteinAutomaton64State {
-            m: &self,
-            vp: 1u64.checked_shl(self.len).unwrap_or(0).wrapping_sub(1),
-            vn: 0,
-            offset: 0,
-        }
-    }
-}
-
-impl AutomatonState for LevenshteinAutomaton64State<'_> {
-    fn step(&self, value: char) -> Self {
-        // Myers as described by Hyyro
-        // Step 1: D0
-        let mut pm = 0;
-        let mut x = 1u64;
-        for c in self.m.string.chars() {
-            if c == value {
-                pm |= x;
+        match &self.state {
+            Generic(v) => *v.last().unwrap(),
+            Bitvector { vp, vn, offset } => {
+                let mask = 1u64
+                    .checked_shl(self.m.len as u32)
+                    .unwrap_or(0)
+                    .wrapping_sub(1);
+                offset + (vp & mask).count_ones() as usize - (vn & mask).count_ones() as usize
             }
-            x <<= 1;
         }
-        let d0 = (((pm & self.vp).wrapping_add(self.vp)) ^ self.vp) | pm | self.vn;
-        // Step 2-3: HP and HN
-        let mut hp = self.vn | !(d0 | self.vp);
-        let mut hn = d0 & self.vp;
-        // Step 4-5: D[m,j]
-        // if (hp & mask) != 0 {
-        //     score += 1;
-        // }
-        // if (hn & mask) != 0 {
-        //     score -= 1;
-        // }
-        // Step 6-7: VP and VN
-        hp = (hp << 1) | 1;
-        hn = hn << 1;
-        Self {
-            m: self.m,
-            vp: hn | !(d0 | hp),
-            vn: hp & d0,
-            offset: self.offset + 1,
-        }
-    }
-
-    fn distance(&self) -> usize {
-        let mask = 1u64.checked_shl(self.m.len).unwrap_or(0).wrapping_sub(1);
-        self.offset + (self.vp & mask).count_ones() as usize
-            - (self.vn & mask).count_ones() as usize
     }
 
     fn can_match(&self, max_edits: usize) -> bool {
-        let mut current = self.offset;
-        (0..)
-            .take(self.m.len as usize)
-            .map(|i| {
-                let mask = 1 << i;
-                if self.vp & mask != 0 {
-                    current += 1;
-                }
-                if self.vn & mask != 0 {
-                    current -= 1;
-                }
-                current
-            })
-            .min()
-            .unwrap_or(self.offset)
-            <= max_edits
+        match &self.state {
+            Generic(v) => v.iter().min().unwrap() <= &max_edits,
+            Bitvector { vp, vn, offset } => {
+                (0..)
+                    .take(self.m.len)
+                    .map(|i| 1 << i)
+                    .scan(*offset, |state, mask| {
+                        if vp & mask != 0 {
+                            *state += 1;
+                        }
+                        if vn & mask != 0 {
+                            *state -= 1;
+                        }
+                        Some(*state)
+                    })
+                    .min()
+                    .unwrap_or(*offset)
+                    <= max_edits
+            }
+        }
     }
 }
 
@@ -157,14 +156,14 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
     if a == b {
         return 0;
     }
-    if a.chars().count() <= 64 {
-        let automaton = LevenshteinAutomaton64::new(a);
-        let mut state = automaton.start();
-        for value in b.chars() {
-            state = state.step(value);
-        }
-        return state.distance();
-    }
+    let len_a = a.chars().count();
+    let len_b = b.chars().count();
+
+    let (a, b) = if (len_a < len_b || len_a > 64) && len_b <= 64 {
+        (b, a)
+    } else {
+        (a, b)
+    };
     let automaton = LevenshteinAutomaton::new(a);
     let mut state = automaton.start();
     for value in b.chars() {
