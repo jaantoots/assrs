@@ -1,5 +1,10 @@
 use pyo3::prelude::*;
-use std::collections::HashMap;
+
+pub trait AutomatonState {
+    fn step(&self, value: char) -> Self;
+    fn distance(&self) -> usize;
+    fn can_match(&self, max_edits: usize) -> bool;
+}
 
 pub struct LevenshteinAutomaton<'a> {
     string: &'a str,
@@ -24,7 +29,7 @@ impl<'a> LevenshteinAutomaton<'a> {
     }
 }
 
-impl<'a> LevenshteinAutomatonState<'a> {
+impl LevenshteinAutomatonState<'_> {
     pub fn step_mut(&mut self, value: char) {
         let mut sub = self.row[0];
         let mut add = sub + 1;
@@ -38,45 +43,42 @@ impl<'a> LevenshteinAutomatonState<'a> {
             self.row[i + 1] = add;
         }
     }
+}
 
-    pub fn step(&self, value: char) -> Self {
+impl AutomatonState for LevenshteinAutomatonState<'_> {
+    fn step(&self, value: char) -> Self {
         let mut new = self.clone();
         new.step_mut(value);
         new
     }
 
-    pub fn distance(&self) -> usize {
+    fn distance(&self) -> usize {
         *self.row.last().unwrap()
     }
 
-    pub fn can_match(&self, max_edits: usize) -> bool {
+    fn can_match(&self, max_edits: usize) -> bool {
         self.row.iter().min().unwrap() <= &max_edits
     }
 }
 
-pub struct LevenshteinAutomaton64 {
-    block: HashMap<char, u64>,
+pub struct LevenshteinAutomaton64<'a> {
+    string: &'a str,
     len: u32,
 }
 
 pub struct LevenshteinAutomaton64State<'a> {
-    m: &'a LevenshteinAutomaton64,
+    m: &'a LevenshteinAutomaton64<'a>,
     vp: u64,
     vn: u64,
     offset: usize,
 }
 
-impl LevenshteinAutomaton64 {
-    pub fn new(string: &str) -> Self {
-        let mut block = HashMap::new();
-        let mut x = 1;
-        let mut len = 0;
-        for c in string.chars() {
-            block.entry(c).and_modify(|e| *e |= x).or_insert(x);
-            x <<= 1;
-            len += 1;
+impl<'a> LevenshteinAutomaton64<'a> {
+    pub fn new(string: &'a str) -> Self {
+        Self {
+            string,
+            len: string.chars().count() as u32,
         }
-        Self { block, len }
     }
 
     pub fn start(&self) -> LevenshteinAutomaton64State {
@@ -89,18 +91,29 @@ impl LevenshteinAutomaton64 {
     }
 }
 
-impl LevenshteinAutomaton64State<'_> {
-    pub fn step(&self, value: char) -> Self {
+impl AutomatonState for LevenshteinAutomaton64State<'_> {
+    fn step(&self, value: char) -> Self {
         // Myers as described by Hyyro
         // Step 1: D0
-        let pm = *self.m.block.get(&value).unwrap_or(&0);
+        let mut pm = 0;
+        let mut x = 1u64;
+        for c in self.m.string.chars() {
+            if c == value {
+                pm |= x;
+            }
+            x <<= 1;
+        }
         let d0 = (((pm & self.vp).wrapping_add(self.vp)) ^ self.vp) | pm | self.vn;
         // Step 2-3: HP and HN
         let mut hp = self.vn | !(d0 | self.vp);
         let mut hn = d0 & self.vp;
         // Step 4-5: D[m,j]
-        // currDist += (hp & mask) != 0
-        // currDist -= (hn & mask) != 0
+        // if (hp & mask) != 0 {
+        //     score += 1;
+        // }
+        // if (hn & mask) != 0 {
+        //     score -= 1;
+        // }
         // Step 6-7: VP and VN
         hp = (hp << 1) | 1;
         hn = hn << 1;
@@ -112,13 +125,13 @@ impl LevenshteinAutomaton64State<'_> {
         }
     }
 
-    pub fn distance(&self) -> usize {
+    fn distance(&self) -> usize {
         let mask = 1u64.checked_shl(self.m.len).unwrap_or(0).wrapping_sub(1);
         self.offset + (self.vp & mask).count_ones() as usize
             - (self.vn & mask).count_ones() as usize
     }
 
-    pub fn can_match(&self, max_edits: usize) -> bool {
+    fn can_match(&self, max_edits: usize) -> bool {
         let mut current = self.offset;
         (0..)
             .take(self.m.len as usize)
@@ -138,45 +151,6 @@ impl LevenshteinAutomaton64State<'_> {
     }
 }
 
-fn levenshtein64(a: &str, b: &str) -> usize {
-    let len = a.chars().count() as u32;
-    let mut vp = 1u64.checked_shl(len).unwrap_or(0).wrapping_sub(1);
-    let mut vn = 0;
-    let mut score = len;
-    let mask = 1u64 << (len - 1);
-
-    for val in b.chars() {
-        // Myers as described by Hyyro
-        // Step 1: D0
-        let mut pm = 0;
-        let mut x = 1u64;
-        for c in a.chars() {
-            if c == val {
-                pm |= x;
-            }
-            x <<= 1;
-        }
-        let d0 = (((pm & vp).wrapping_add(vp)) ^ vp) | pm | vn;
-        // Step 2-3: HP and HN
-        let mut hp = vn | !(d0 | vp);
-        let mut hn = d0 & vp;
-        // Step 4-5: D[m,j]
-        if (hp & mask) != 0 {
-            score += 1;
-        }
-        if (hn & mask) != 0 {
-            score -= 1;
-        }
-        // Step 6-7: VP and VN
-        hp = (hp << 1) | 1;
-        hn = hn << 1;
-
-        vp = hn | !(d0 | hp);
-        vn = hp & d0;
-    }
-    score as usize
-}
-
 /// Find the Levenshtein distance between two strings
 #[pyfunction]
 pub fn levenshtein(a: &str, b: &str) -> usize {
@@ -184,7 +158,12 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
         return 0;
     }
     if a.chars().count() <= 64 {
-        return levenshtein64(a, b);
+        let automaton = LevenshteinAutomaton64::new(a);
+        let mut state = automaton.start();
+        for value in b.chars() {
+            state = state.step(value);
+        }
+        return state.distance();
     }
     let automaton = LevenshteinAutomaton::new(a);
     let mut state = automaton.start();

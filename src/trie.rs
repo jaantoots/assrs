@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-use crate::levenshtein::{LevenshteinAutomaton, LevenshteinAutomatonState};
+use crate::levenshtein::{AutomatonState, LevenshteinAutomaton, LevenshteinAutomaton64};
 
 struct FindResult(usize, Vec<char>);
 
@@ -20,11 +20,7 @@ impl Trie {
         }
     }
 
-    fn find_automaton(
-        &self,
-        state: &LevenshteinAutomatonState,
-        max_edits: usize,
-    ) -> Option<FindResult> {
+    fn find_automaton(&self, state: &impl AutomatonState, max_edits: usize) -> Option<FindResult> {
         let mut best = None;
         if !state.can_match(max_edits) {
             return best;
@@ -69,6 +65,16 @@ impl Trie {
     }
 
     fn find_one(&self, string: &str, max_edits: Option<usize>) -> Option<String> {
+        if string.chars().count() <= 64 {
+            let automaton = LevenshteinAutomaton64::new(string);
+            return Some(
+                self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?
+                    .1
+                    .iter()
+                    .rev()
+                    .collect(),
+            );
+        }
         let automaton = LevenshteinAutomaton::new(string);
         Some(
             self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?
