@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonState};
+use crate::levenshtein::{LevenshteinAutomaton, LevenshteinAutomatonState};
 
 struct FindResult(usize, Vec<char>);
 

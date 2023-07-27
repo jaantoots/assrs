@@ -3,7 +3,6 @@ use pyo3::prelude::*;
 use crate::bktree::BKTreeLevenshtein;
 use crate::trie::Trie;
 
-mod automaton;
 mod bktree;
 mod levenshtein;
 mod trie;
