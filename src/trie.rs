@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonState};
@@ -22,9 +23,9 @@ impl Trie {
         &self,
         state: &LevenshteinAutomatonState,
         max_edits: usize,
-    ) -> (usize, String) {
+    ) -> (usize, Cow<'_, str>) {
         let mut best = usize::MAX;
-        let mut value = String::from("");
+        let mut value = "".into();
         if !state.can_match(max_edits) {
             return (best, value);
         }
@@ -36,7 +37,7 @@ impl Trie {
                 subtrie.find_automaton(&state.step(*next), max_edits.min(best - 1));
             if distance < best {
                 best = distance;
-                value = next.to_string() + &tail;
+                value = (next.to_string() + &tail).into();
             }
         }
         (best, value)
@@ -69,7 +70,7 @@ impl Trie {
         let (distance, value) =
             self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX));
         if distance <= max_edits.unwrap_or(usize::MAX) {
-            return Some(value);
+            return Some(value.to_string());
         }
         None
     }
