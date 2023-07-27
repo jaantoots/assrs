@@ -138,6 +138,45 @@ impl LevenshteinAutomaton64State<'_> {
     }
 }
 
+fn levenshtein64(a: &str, b: &str) -> usize {
+    let mut block = HashMap::new();
+    let mut x = 1u64;
+    let mut len = 0;
+    for c in a.chars() {
+        block.entry(c).and_modify(|e| *e |= x).or_insert(x);
+        x <<= 1;
+        len += 1;
+    }
+    let mut vp = 1u64.checked_shl(len).unwrap_or(0).wrapping_sub(1);
+    let mut vn = 0;
+    let mut score = len;
+    let mask = 1u64 << (len - 1);
+
+    for c in b.chars() {
+        // Myers as described by Hyyro
+        // Step 1: D0
+        let pm = *block.get(&c).unwrap_or(&0);
+        let d0 = (((pm & vp).wrapping_add(vp)) ^ vp) | pm | vn;
+        // Step 2-3: HP and HN
+        let mut hp = vn | !(d0 | vp);
+        let mut hn = d0 & vp;
+        // Step 4-5: D[m,j]
+        if (hp & mask) != 0 {
+            score += 1;
+        }
+        if (hn & mask) != 0 {
+            score -= 1;
+        }
+        // Step 6-7: VP and VN
+        hp = (hp << 1) | 1;
+        hn = hn << 1;
+
+        vp = hn | !(d0 | hp);
+        vn = hp & d0;
+    }
+    score as usize
+}
+
 /// Find the Levenshtein distance between two strings
 #[pyfunction]
 pub fn levenshtein(a: &str, b: &str) -> usize {
@@ -145,12 +184,7 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
         return 0;
     }
     if a.chars().count() <= 64 {
-        let automaton = LevenshteinAutomaton64::new(a);
-        let mut state = automaton.start();
-        for value in b.chars() {
-            state = state.step(value);
-        }
-        return state.distance();
+        return levenshtein64(a, b);
     }
     let automaton = LevenshteinAutomaton::new(a);
     let mut state = automaton.start();
