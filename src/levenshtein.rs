@@ -9,6 +9,7 @@ pub trait AutomatonState {
 pub struct LevenshteinAutomaton<'a> {
     string: &'a str,
     len: usize,
+    mask: u64,
 }
 
 #[derive(Clone)]
@@ -27,9 +28,11 @@ pub struct LevenshteinAutomatonState<'a> {
 
 impl<'a> LevenshteinAutomaton<'a> {
     pub fn new(string: &'a str) -> Self {
+        let len = string.chars().count();
         Self {
             string,
-            len: string.chars().count(),
+            len,
+            mask: 1u64.checked_shl(len as u32).unwrap_or(0).wrapping_sub(1),
         }
     }
 
@@ -38,10 +41,7 @@ impl<'a> LevenshteinAutomaton<'a> {
             m: &self,
             state: if self.len <= 64 {
                 LevenshteinState::Bitvector {
-                    vp: 1u64
-                        .checked_shl(self.len as u32)
-                        .unwrap_or(0)
-                        .wrapping_sub(1),
+                    vp: self.mask,
                     vn: 0,
                     offset: 0,
                 }
@@ -117,11 +117,8 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
         match &self.state {
             Generic(v) => *v.last().unwrap(),
             Bitvector { vp, vn, offset } => {
-                let mask = 1u64
-                    .checked_shl(self.m.len as u32)
-                    .unwrap_or(0)
-                    .wrapping_sub(1);
-                offset + (vp & mask).count_ones() as usize - (vn & mask).count_ones() as usize
+                offset + (vp & self.m.mask).count_ones() as usize
+                    - (vn & self.m.mask).count_ones() as usize
             }
         }
     }
