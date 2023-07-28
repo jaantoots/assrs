@@ -127,21 +127,22 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
         match &self.state {
             General(v) => v.iter().min().unwrap() <= &max_edits,
             Bitvector { vp, vn, offset } => {
-                (0..)
-                    .take(self.m.len)
-                    .map(|i| 1 << i)
-                    .scan(*offset, |state, mask| {
-                        if vp & mask != 0 {
-                            *state += 1;
-                        }
-                        if vn & mask != 0 {
-                            *state -= 1;
-                        }
-                        Some(*state)
-                    })
-                    .min()
-                    .unwrap_or(*offset)
-                    <= max_edits
+                *offset <= max_edits
+                    || (0..)
+                        .take(self.m.len)
+                        .map(|i| 1 << i)
+                        .scan(*offset, |state, mask| {
+                            if vp & mask != 0 {
+                                *state += 1;
+                            }
+                            if vn & mask != 0 {
+                                *state -= 1;
+                            }
+                            Some(*state)
+                        })
+                        .min()
+                        .unwrap_or(*offset)
+                        <= max_edits
             }
         }
     }
@@ -167,4 +168,85 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
         state.step_mut(value);
     }
     state.distance()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn distances() {
+        assert_eq!(levenshtein("foo", "bar"), 3);
+        assert_eq!(levenshtein("foo", ""), 3);
+        assert_eq!(levenshtein("", "bar"), 3);
+        assert_eq!(levenshtein("bar", "baz"), 1);
+        assert_eq!(levenshtein("foo", "foo"), 0);
+        assert_eq!(levenshtein("", ""), 0);
+        assert_eq!(levenshtein("ab", "aacbb"), 3);
+
+        assert_eq!(levenshtein(&"abcd".repeat(16), &"abcd".repeat(16)), 0);
+        assert_eq!(levenshtein(&"abcde".repeat(13), &""), 65);
+        assert_eq!(levenshtein(&"abcde".repeat(13), &"a".repeat(65)), 52);
+        assert_eq!(levenshtein(&"abcd".repeat(64), &"abcd".repeat(16)), 192);
+        assert_eq!(levenshtein(&"abcd".repeat(64), &"abcd".repeat(128)), 256);
+    }
+
+    #[test]
+    fn automaton() {
+        let automaton = LevenshteinAutomaton::new("kitten");
+        let mut state = automaton.start();
+        assert_eq!(state.distance(), 6);
+        assert!(state.can_match(0));
+        assert!(state.can_match(usize::MAX));
+
+        state = state.step('s');
+        assert_eq!(state.distance(), 6);
+        assert!(!state.can_match(0));
+        assert!(state.can_match(1));
+
+        state = state.step('i');
+        assert_eq!(state.distance(), 5);
+        assert!(!state.can_match(0));
+        assert!(state.can_match(1));
+
+        state = state.step('t');
+        assert_eq!(state.distance(), 4);
+        assert!(!state.can_match(0));
+        assert!(state.can_match(1));
+
+        state = state.step('t');
+        assert_eq!(state.distance(), 3);
+        assert!(!state.can_match(0));
+        assert!(state.can_match(1));
+
+        state = state.step('i');
+        assert_eq!(state.distance(), 3);
+        assert!(!state.can_match(1));
+        assert!(state.can_match(2));
+
+        state = state.step('n');
+        assert_eq!(state.distance(), 2);
+        assert!(!state.can_match(1));
+        assert!(state.can_match(2));
+
+        state = state.step('g');
+        assert_eq!(state.distance(), 3);
+        assert!(!state.can_match(2));
+        assert!(state.can_match(3));
+    }
+
+    #[test]
+    fn long_automaton() {
+        let string = "abcd".repeat(64);
+        let automaton = LevenshteinAutomaton::new(&string);
+        let mut state = automaton.start();
+        for _i in (0..).take(128) {
+            state = state.step('a');
+        }
+        assert_eq!(state.distance(), 192);
+        assert!(!state.can_match(0));
+        assert!(!state.can_match(95));
+        assert!(state.can_match(96));
+        assert!(state.can_match(usize::MAX));
+    }
 }
