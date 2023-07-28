@@ -3,11 +3,12 @@ use std::collections::HashMap;
 
 use crate::levenshtein::{AutomatonState, LevenshteinAutomaton};
 
-struct FindResult(usize, Vec<char>);
+struct FindResult<'a>(usize, &'a str);
 
 #[pyclass]
 pub struct Trie {
-    is_terminal: bool,
+    // Indicates terminal and nice when traversing
+    value: Option<String>,
     // Maybe expensive to iterate over O(capacity) rather than O(len)?
     children: HashMap<char, Trie>,
 }
@@ -15,7 +16,7 @@ pub struct Trie {
 impl Trie {
     pub fn new() -> Self {
         Self {
-            is_terminal: false,
+            value: None,
             children: HashMap::new(),
         }
     }
@@ -26,16 +27,18 @@ impl Trie {
             return best;
         }
         let distance = state.distance();
-        if self.is_terminal && distance <= max_edits {
-            best = Some(FindResult(distance, Vec::new()));
+        if distance <= max_edits {
+            best = self
+                .value
+                .as_ref()
+                .and_then(|v| Some(FindResult(distance, v)));
         }
         for (next, subtrie) in self.children.iter() {
             // Method returns some iff best is none or distance is lower
-            if let Some(mut result) = subtrie.find_automaton(
+            if let Some(result) = subtrie.find_automaton(
                 &state.step(*next),
                 best.as_ref().map_or(max_edits, |x| x.0 - 1),
             ) {
-                result.1.push(*next);
                 best = Some(result);
             };
         }
@@ -61,7 +64,7 @@ impl Trie {
         for value in item.chars() {
             node = node.children.entry(value).or_insert_with(|| Self::new());
         }
-        node.is_terminal = true;
+        node.value = Some(item.to_string());
     }
 
     fn find_one(&self, string: &str, max_edits: Option<usize>) -> Option<String> {
@@ -69,9 +72,7 @@ impl Trie {
         Some(
             self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?
                 .1
-                .iter()
-                .rev()
-                .collect(),
+                .to_string(),
         )
     }
 }
