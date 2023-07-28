@@ -8,18 +8,11 @@ mod levenshtein;
 mod trie;
 
 #[pyfunction]
-fn levenshtein_extract(a: &str, b: Vec<&str>) -> (usize, usize) {
-    let mut best = usize::MAX;
-    let mut idx = 0;
-    let mut current;
-    for (i, choice) in b.iter().enumerate() {
-        current = levenshtein::levenshtein(a, choice);
-        if current < best {
-            best = current;
-            idx = i;
-        }
-    }
-    (best, idx)
+fn levenshtein_extract(a: &str, b: Vec<&str>) -> Option<(usize, usize)> {
+    b.iter()
+        .map(|x| levenshtein::levenshtein(a, x))
+        .enumerate()
+        .min_by_key(|(_i, x)| *x)
 }
 
 /// A Python module implemented in Rust.
