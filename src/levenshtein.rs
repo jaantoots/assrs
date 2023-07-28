@@ -14,7 +14,7 @@ pub struct LevenshteinAutomaton<'a> {
 
 #[derive(Clone)]
 enum LevenshteinState {
-    Generic(Vec<usize>),
+    General(Vec<usize>),
     Bitvector { vp: u64, vn: u64, offset: usize },
 }
 
@@ -46,7 +46,7 @@ impl<'a> LevenshteinAutomaton<'a> {
                     offset: 0,
                 }
             } else {
-                LevenshteinState::Generic((0..).take(self.len + 1).collect())
+                LevenshteinState::General((0..).take(self.len + 1).collect())
             },
         }
     }
@@ -55,7 +55,7 @@ impl<'a> LevenshteinAutomaton<'a> {
 impl LevenshteinAutomatonState<'_> {
     fn step_mut(&mut self, value: char) {
         match self.state {
-            Generic(ref mut v) => {
+            General(ref mut v) => {
                 let mut sub = v[0];
                 let mut add = sub + 1;
                 let mut del;
@@ -115,7 +115,7 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
 
     fn distance(&self) -> usize {
         match &self.state {
-            Generic(v) => *v.last().unwrap(),
+            General(v) => *v.last().unwrap(),
             Bitvector { vp, vn, offset } => {
                 offset + (vp & self.m.mask).count_ones() as usize
                     - (vn & self.m.mask).count_ones() as usize
@@ -125,7 +125,7 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
 
     fn can_match(&self, max_edits: usize) -> bool {
         match &self.state {
-            Generic(v) => v.iter().min().unwrap() <= &max_edits,
+            General(v) => v.iter().min().unwrap() <= &max_edits,
             Bitvector { vp, vn, offset } => {
                 (0..)
                     .take(self.m.len)
