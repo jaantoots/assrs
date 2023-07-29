@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn trie() {
+    fn values() {
         let mut trie = Trie::new();
         assert!(!trie.contains(""));
 

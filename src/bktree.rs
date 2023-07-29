@@ -153,3 +153,51 @@ impl BKTreeLevenshtein {
         Box::new(self.tree.iter().flatten())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn empty_str() {
+        let mut tree = BKTreeLevenshtein::new();
+        assert!(!tree.contains(""));
+        assert_eq!(tree.iter().count(), 0);
+        tree.insert("".to_string());
+        assert!(tree.contains(""));
+        assert_eq!(tree.iter().collect::<Vec<_>>(), vec![""]);
+    }
+
+    #[test]
+    fn values() {
+        let mut tree = BKTreeLevenshtein::new();
+        assert!(!tree.contains(""));
+
+        tree.insert("foo".to_string());
+        tree.insert("bar".to_string());
+        tree.insert("baz".to_string());
+        assert!(!tree.contains(""));
+        assert!(tree.contains("foo"));
+        assert_eq!(
+            tree.iter().collect::<HashSet<_>>(),
+            HashSet::from(["foo", "bar", "baz"])
+        );
+
+        tree.insert("".to_string());
+        assert!(tree.contains(""));
+        assert_eq!(
+            tree.iter().collect::<HashSet<_>>(),
+            HashSet::from(["foo", "bar", "baz", ""])
+        );
+    }
+
+    #[test]
+    fn find() {
+        let tree = BKTreeLevenshtein::from_iter(vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(tree.find_one("", Some(2)), None);
+        assert_eq!(tree.find_one("baz", Some(2)), Some("bar"));
+        assert_eq!(tree.find_one("baz", None), Some("bar"));
+        assert_eq!(tree.find_one("baz", Some(0)), None);
+    }
+}
