@@ -67,12 +67,19 @@ impl Trie {
         node.value = Some(item.to_string());
     }
 
-    fn find_one(&self, string: &str, max_edits: Option<usize>) -> Option<String> {
+    pub fn get(&self, item: &str) -> Option<&str> {
+        let mut node = self;
+        for value in item.chars() {
+            node = node.children.get(&value)?;
+        }
+        node.value.as_deref()
+    }
+
+    pub fn find_one(&self, string: &str, max_edits: Option<usize>) -> Option<&str> {
         let automaton = LevenshteinAutomaton::new(string);
         Some(
             self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?
-                .1
-                .to_string(),
+                .1,
         )
     }
 }
