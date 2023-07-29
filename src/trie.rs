@@ -21,7 +21,7 @@ pub struct Trie {
 impl Trie {
     #[new]
     pub fn py_new(items: Option<Vec<String>>) -> Self {
-        items.map_or_else(|| Self::new(), |v| Self::from_iter(v))
+        items.map_or_else(Self::new, Self::from_iter)
     }
 
     #[staticmethod]
@@ -35,7 +35,7 @@ impl Trie {
     pub fn insert(&mut self, value: String) {
         let mut node = self;
         for c in value.chars() {
-            node = node.children.entry(c).or_insert_with(|| Self::new());
+            node = node.children.entry(c).or_insert_with(Self::new);
         }
         node.value = Some(value);
     }
@@ -61,6 +61,12 @@ impl Trie {
         let automaton = LevenshteinAutomaton::new(query);
         let result = self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?;
         Some((result.value, result.distance))
+    }
+}
+
+impl Default for Trie {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -109,7 +115,7 @@ impl Trie {
             best = self
                 .value
                 .as_ref()
-                .and_then(|k| Some(FindResult { value: k, distance }));
+                .map(|k| FindResult { value: k, distance });
         }
         for (next, subtrie) in self.children.iter() {
             // Method returns some iff best is none or distance is lower

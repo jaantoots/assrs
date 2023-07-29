@@ -38,7 +38,7 @@ impl<'a> LevenshteinAutomaton<'a> {
 
     pub fn start(&self) -> LevenshteinAutomatonState {
         LevenshteinAutomatonState {
-            m: &self,
+            m: self,
             state: if self.len <= 64 {
                 LevenshteinState::Bitvector {
                     vp: self.mask,
@@ -96,7 +96,7 @@ impl LevenshteinAutomatonState<'_> {
                 // }
                 // Step 6-7: VP and VN
                 hp = (hp << 1) | 1;
-                hn = hn << 1;
+                hn <<= 1;
 
                 *vp = hn | !(d0 | hp);
                 *vn = hp & d0;

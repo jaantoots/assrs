@@ -13,7 +13,7 @@ struct Tree {
 impl Tree {
     fn new(value: String) -> Self {
         Self {
-            value: value,
+            value,
             children: HashMap::new(),
         }
     }
@@ -42,7 +42,7 @@ pub struct BKTreeLevenshtein {
 impl BKTreeLevenshtein {
     #[new]
     pub fn py_new(items: Option<Vec<String>>) -> Self {
-        items.map_or_else(|| Self::new(), |v| Self::from_iter(v))
+        items.map_or_else(Self::new, Self::from_iter)
     }
 
     #[staticmethod]
@@ -62,7 +62,7 @@ impl BKTreeLevenshtein {
     pub fn get(&self, value: &str) -> Option<&str> {
         let mut node = self.tree.as_ref()?;
         loop {
-            let distance = levenshtein::levenshtein(&value, &node.value);
+            let distance = levenshtein::levenshtein(value, &node.value);
             if distance == 0 {
                 break;
             }
@@ -89,7 +89,7 @@ impl BKTreeLevenshtein {
         let mut max_edits = max_edits.unwrap_or(usize::MAX);
 
         while let Some(node) = candidates.pop_front() {
-            let distance = levenshtein::levenshtein(&query, &node.value);
+            let distance = levenshtein::levenshtein(query, &node.value);
             if distance <= max_edits {
                 max_edits = distance;
                 best = Some((node.value.as_str(), distance));
@@ -107,6 +107,12 @@ impl BKTreeLevenshtein {
             }
         }
         best
+    }
+}
+
+impl Default for BKTreeLevenshtein {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
