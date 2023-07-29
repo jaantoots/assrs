@@ -32,6 +32,7 @@ impl Tree {
     }
 }
 
+/// BK-tree storing the strings to search against
 #[pyclass]
 pub struct BKTreeLevenshtein {
     tree: Option<Tree>,
@@ -78,7 +79,8 @@ impl BKTreeLevenshtein {
         self.iter().collect()
     }
 
-    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<&str> {
+    /// Find best match in BK-tree for query
+    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<(&str, usize)> {
         let tree = self.tree.as_ref()?;
         let mut candidates = VecDeque::new();
         candidates.push_back(tree);
@@ -90,7 +92,7 @@ impl BKTreeLevenshtein {
             let distance = levenshtein::levenshtein(&query, &node.value);
             if distance <= max_edits {
                 max_edits = distance;
-                best = Some(node.value.as_str());
+                best = Some((node.value.as_str(), distance));
             }
             if !node.children.is_empty() {
                 let lower = distance - max_edits;
@@ -196,8 +198,8 @@ mod tests {
     fn find() {
         let tree = BKTreeLevenshtein::from_iter(vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(tree.find_one("", Some(2)), None);
-        assert_eq!(tree.find_one("baz", Some(2)), Some("bar"));
-        assert_eq!(tree.find_one("baz", None), Some("bar"));
+        assert_eq!(tree.find_one("baz", Some(2)), Some(("bar", 1)));
+        assert_eq!(tree.find_one("baz", None), Some(("bar", 1)));
         assert_eq!(tree.find_one("baz", Some(0)), None);
     }
 }

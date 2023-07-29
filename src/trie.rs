@@ -3,8 +3,12 @@ use std::collections::HashMap;
 
 use crate::levenshtein::{AutomatonState, LevenshteinAutomaton};
 
-struct FindResult<'a>(usize, &'a str);
+struct FindResult<'a> {
+    value: &'a str,
+    distance: usize,
+}
 
+/// Trie storing the strings to search against
 #[pyclass]
 pub struct Trie {
     // Indicates terminal and nice when traversing
@@ -52,12 +56,11 @@ impl Trie {
         self.iter().collect()
     }
 
-    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<&str> {
+    /// Find best match in trie for query
+    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<(&str, usize)> {
         let automaton = LevenshteinAutomaton::new(query);
-        Some(
-            self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?
-                .1,
-        )
+        let result = self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?;
+        Some((result.value, result.distance))
     }
 }
 
@@ -106,13 +109,13 @@ impl Trie {
             best = self
                 .value
                 .as_ref()
-                .and_then(|k| Some(FindResult(distance, k)));
+                .and_then(|k| Some(FindResult { value: k, distance }));
         }
         for (next, subtrie) in self.children.iter() {
             // Method returns some iff best is none or distance is lower
             if let Some(result) = subtrie.find_automaton(
                 &state.step(*next),
-                best.as_ref().map_or(max_edits, |x| x.0 - 1),
+                best.as_ref().map_or(max_edits, |x| x.distance - 1),
             ) {
                 best = Some(result);
             };
@@ -163,8 +166,8 @@ mod tests {
     fn find() {
         let trie = Trie::from_iter(vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(trie.find_one("", Some(2)), None);
-        assert_eq!(trie.find_one("baz", Some(2)), Some("bar"));
-        assert_eq!(trie.find_one("baz", None), Some("bar"));
+        assert_eq!(trie.find_one("baz", Some(2)), Some(("bar", 1)));
+        assert_eq!(trie.find_one("baz", None), Some(("bar", 1)));
         assert_eq!(trie.find_one("baz", Some(0)), None);
     }
 }
