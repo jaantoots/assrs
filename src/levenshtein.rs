@@ -240,7 +240,7 @@ mod tests {
         let string = "abcd".repeat(64);
         let automaton = LevenshteinAutomaton::new(&string);
         let mut state = automaton.start();
-        for _i in (0..).take(128) {
+        for _i in 0..128 {
             state = state.step('a');
         }
         assert_eq!(state.distance(), 192);
