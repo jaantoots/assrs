@@ -87,7 +87,7 @@ impl<'a> IntoIterator for &'a Trie {
 }
 
 impl Trie {
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
         Box::new(
             self.value
                 .iter()
@@ -118,5 +118,53 @@ impl Trie {
             };
         }
         best
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn empty_str() {
+        let mut trie = Trie::new();
+        assert!(!trie.contains(""));
+        assert_eq!(trie.iter().count(), 0);
+        trie.insert("".to_string());
+        assert!(trie.contains(""));
+        assert_eq!(trie.iter().collect::<Vec<_>>(), vec![""]);
+    }
+
+    #[test]
+    fn trie() {
+        let mut trie = Trie::new();
+        assert!(!trie.contains(""));
+
+        trie.insert("foo".to_string());
+        trie.insert("bar".to_string());
+        trie.insert("baz".to_string());
+        assert!(!trie.contains(""));
+        assert!(trie.contains("foo"));
+        assert_eq!(
+            trie.iter().collect::<HashSet<_>>(),
+            HashSet::from(["foo", "bar", "baz"])
+        );
+
+        trie.insert("".to_string());
+        assert!(trie.contains(""));
+        assert_eq!(
+            trie.iter().collect::<HashSet<_>>(),
+            HashSet::from(["foo", "bar", "baz", ""])
+        );
+    }
+
+    #[test]
+    fn find() {
+        let trie = Trie::from_iter(vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(trie.find_one("", Some(2)), None);
+        assert_eq!(trie.find_one("baz", Some(2)), Some("bar"));
+        assert_eq!(trie.find_one("baz", None), Some("bar"));
+        assert_eq!(trie.find_one("baz", Some(0)), None);
     }
 }
