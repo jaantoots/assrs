@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "Approximate string search"
 license = "MIT OR Apache-2.0"
+homepage = "https://github.com/jaantoots/assrs"
+repository = "https://github.com/jaantoots/assrs.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
