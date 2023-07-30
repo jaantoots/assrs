@@ -34,12 +34,12 @@ impl Tree {
 
 /// BK-tree storing the strings to search against
 #[pyclass]
-pub struct BKTreeLevenshtein {
+pub struct BKTree {
     tree: Option<Tree>,
 }
 
 #[pymethods]
-impl BKTreeLevenshtein {
+impl BKTree {
     #[new]
     pub fn py_new(items: Option<Vec<String>>) -> Self {
         items.map_or_else(Self::new, Self::from_iter)
@@ -110,13 +110,13 @@ impl BKTreeLevenshtein {
     }
 }
 
-impl Default for BKTreeLevenshtein {
+impl Default for BKTree {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Extend<String> for BKTreeLevenshtein {
+impl Extend<String> for BKTree {
     fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I) {
         for item in iter {
             self.insert(item);
@@ -124,7 +124,7 @@ impl Extend<String> for BKTreeLevenshtein {
     }
 }
 
-impl FromIterator<String> for BKTreeLevenshtein {
+impl FromIterator<String> for BKTree {
     fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> Self {
         let mut tree = Self::new();
         tree.extend(iter);
@@ -147,7 +147,7 @@ impl Tree {
     }
 }
 
-impl<'a> IntoIterator for &'a BKTreeLevenshtein {
+impl<'a> IntoIterator for &'a BKTree {
     type Item = &'a str;
     type IntoIter = Box<dyn Iterator<Item = &'a str> + 'a>;
 
@@ -156,7 +156,7 @@ impl<'a> IntoIterator for &'a BKTreeLevenshtein {
     }
 }
 
-impl BKTreeLevenshtein {
+impl BKTree {
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
         Box::new(self.tree.iter().flatten())
     }
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn empty_str() {
-        let mut tree = BKTreeLevenshtein::new();
+        let mut tree = BKTree::new();
         assert!(!tree.contains(""));
         assert_eq!(tree.iter().count(), 0);
         tree.insert("".to_string());
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn values() {
-        let mut tree = BKTreeLevenshtein::new();
+        let mut tree = BKTree::new();
         assert!(!tree.contains(""));
 
         tree.insert("foo".to_string());
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn find() {
-        let tree = BKTreeLevenshtein::from_iter(vec!["foo".to_string(), "bar".to_string()]);
+        let tree = BKTree::from_iter(vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(tree.find_one("", Some(2)), None);
         assert_eq!(tree.find_one("baz", Some(2)), Some(("bar", 1)));
         assert_eq!(tree.find_one("baz", None), Some(("bar", 1)));

@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::bktree::BKTreeLevenshtein;
+use crate::bktree::BKTree;
 use crate::trie::Trie;
 
 mod bktree;
@@ -25,7 +25,7 @@ fn levenshtein_extract(query: &str, choices: Vec<&str>) -> Option<(String, usize
 fn assrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(levenshtein::levenshtein, m)?)?;
     m.add_function(wrap_pyfunction!(levenshtein_extract, m)?)?;
-    m.add_class::<BKTreeLevenshtein>()?;
+    m.add_class::<BKTree>()?;
     m.add_class::<Trie>()?;
     Ok(())
 }
