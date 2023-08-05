@@ -14,7 +14,8 @@ pub struct Trie {
     // Indicates terminal and nice when traversing
     value: Option<String>,
     // Maybe expensive to iterate over O(capacity) rather than O(len)?
-    children: HashMap<char, Trie>,
+    children_index: HashMap<char, usize>,
+    children: Vec<(char, Trie)>,
 }
 
 #[pymethods]
@@ -28,14 +29,19 @@ impl Trie {
     pub fn new() -> Self {
         Self {
             value: None,
-            children: HashMap::new(),
+            children_index: HashMap::new(),
+            children: Vec::new(),
         }
     }
 
     pub fn insert(&mut self, value: String) {
         let mut node = self;
         for c in value.chars() {
-            node = node.children.entry(c).or_insert_with(Self::new);
+            let idx = node.children_index.entry(c).or_insert_with(|| {
+                node.children.push((c, Self::new()));
+                node.children.len() - 1
+            });
+            node = &mut node.children[*idx].1;
         }
         node.value = Some(value);
     }
@@ -43,7 +49,8 @@ impl Trie {
     pub fn get(&self, value: &str) -> Option<&str> {
         let mut node = self;
         for c in value.chars() {
-            node = node.children.get(&c)?;
+            let idx = node.children_index.get(&c)?;
+            node = &node.children[*idx].1;
         }
         node.value.as_deref()
     }
@@ -101,7 +108,7 @@ impl Trie {
             self.value
                 .iter()
                 .map(|v| v.as_str())
-                .chain(self.children.values().flat_map(|x| x.iter())),
+                .chain(self.children.iter().flat_map(|x| x.1.iter())),
         )
     }
 
