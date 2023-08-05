@@ -106,27 +106,26 @@ impl Trie {
     }
 
     fn find_automaton(&self, state: &impl AutomatonState, max_edits: usize) -> Option<FindResult> {
-        let mut best = None;
         if !state.can_match(max_edits) {
-            return best;
+            return None;
         }
-        let distance = state.distance();
-        if distance <= max_edits {
-            best = self
-                .value
-                .as_ref()
-                .map(|k| FindResult { value: k, distance });
-        }
-        for (next, subtrie) in self.children.iter() {
+        let best = self
+            .value
+            .as_ref()
+            .map(|value| FindResult {
+                value,
+                distance: state.distance(),
+            })
+            .filter(|r| r.distance <= max_edits);
+        self.children.iter().fold(best, |best, (next, subtrie)| {
             // Method returns some iff best is none or distance is lower
-            if let Some(result) = subtrie.find_automaton(
-                &state.step(*next),
-                best.as_ref().map_or(max_edits, |x| x.distance - 1),
-            ) {
-                best = Some(result);
-            };
-        }
-        best
+            subtrie
+                .find_automaton(
+                    &state.step(*next),
+                    best.as_ref().map_or(max_edits, |x| x.distance - 1),
+                )
+                .or(best)
+        })
     }
 }
 
