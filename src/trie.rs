@@ -5,7 +5,7 @@ use crate::levenshtein::{AutomatonState, LevenshteinAutomaton};
 
 struct FindResult<'a> {
     value: &'a str,
-    distance: usize,
+    distance: u32,
 }
 
 /// Trie storing the strings to search against
@@ -64,9 +64,9 @@ impl Trie {
     }
 
     /// Find best match in trie for query
-    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<(&str, usize)> {
+    pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let automaton = LevenshteinAutomaton::new(query);
-        let result = self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?;
+        let result = self.find_automaton(&automaton.start(), max_edits.unwrap_or(u32::MAX))?;
         Some((result.value, result.distance))
     }
 }
@@ -112,7 +112,7 @@ impl Trie {
         )
     }
 
-    fn find_automaton(&self, state: &impl AutomatonState, max_edits: usize) -> Option<FindResult> {
+    fn find_automaton(&self, state: &impl AutomatonState, max_edits: u32) -> Option<FindResult> {
         if !state.can_match(max_edits) {
             return None;
         }

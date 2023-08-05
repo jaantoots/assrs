@@ -7,7 +7,7 @@ use crate::levenshtein;
 
 struct Tree {
     value: String,
-    children: HashMap<usize, Tree>,
+    children: HashMap<u32, Tree>,
 }
 
 impl Tree {
@@ -80,13 +80,13 @@ impl BKTree {
     }
 
     /// Find best match in BK-tree for query
-    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<(&str, usize)> {
+    pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let tree = self.tree.as_ref()?;
         let mut candidates = VecDeque::new();
         candidates.push_back(tree);
 
         let mut best = None;
-        let mut max_edits = max_edits.unwrap_or(usize::MAX);
+        let mut max_edits = max_edits.unwrap_or(u32::MAX);
 
         while let Some(node) = candidates.pop_front() {
             let distance = levenshtein::levenshtein(query, &node.value);

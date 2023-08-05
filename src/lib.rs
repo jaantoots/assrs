@@ -11,7 +11,7 @@ mod trie;
 ///
 /// Returns (choice, distance, index) or None (for empty choices)
 #[pyfunction]
-fn levenshtein_extract(query: &str, choices: Vec<&str>) -> Option<(String, usize, usize)> {
+fn levenshtein_extract(query: &str, choices: Vec<&str>) -> Option<(String, u32, usize)> {
     choices
         .iter()
         .map(|x| (x, levenshtein::levenshtein(query, x)))

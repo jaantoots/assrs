@@ -2,8 +2,8 @@ use pyo3::prelude::*;
 
 pub trait AutomatonState {
     fn step(&self, value: char) -> Self;
-    fn distance(&self) -> usize;
-    fn can_match(&self, max_edits: usize) -> bool;
+    fn distance(&self) -> u32;
+    fn can_match(&self, max_edits: u32) -> bool;
 }
 
 pub struct LevenshteinAutomaton<'a> {
@@ -14,8 +14,8 @@ pub struct LevenshteinAutomaton<'a> {
 
 #[derive(Clone)]
 enum LevenshteinState {
-    General(Vec<usize>),
-    Bitvector { vp: u64, vn: u64, offset: usize },
+    General(Vec<u32>),
+    Bitvector { vp: u64, vn: u64, offset: u32 },
 }
 
 use LevenshteinState::*;
@@ -113,17 +113,16 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
         new
     }
 
-    fn distance(&self) -> usize {
+    fn distance(&self) -> u32 {
         match &self.state {
             General(v) => *v.last().unwrap(),
             Bitvector { vp, vn, offset } => {
-                offset + (vp & self.m.mask).count_ones() as usize
-                    - (vn & self.m.mask).count_ones() as usize
+                offset + (vp & self.m.mask).count_ones() - (vn & self.m.mask).count_ones()
             }
         }
     }
 
-    fn can_match(&self, max_edits: usize) -> bool {
+    fn can_match(&self, max_edits: u32) -> bool {
         match &self.state {
             General(v) => v.iter().min().unwrap() <= &max_edits,
             Bitvector { vp, vn, offset } => {
@@ -150,7 +149,7 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
 
 /// Find the Levenshtein distance between two strings
 #[pyfunction]
-pub fn levenshtein(a: &str, b: &str) -> usize {
+pub fn levenshtein(a: &str, b: &str) -> u32 {
     if a == b {
         return 0;
     }
@@ -197,7 +196,7 @@ mod tests {
         let mut state = automaton.start();
         assert_eq!(state.distance(), 6);
         assert!(state.can_match(0));
-        assert!(state.can_match(usize::MAX));
+        assert!(state.can_match(u32::MAX));
 
         state = state.step('s');
         assert_eq!(state.distance(), 6);
@@ -247,6 +246,6 @@ mod tests {
         assert!(!state.can_match(0));
         assert!(!state.can_match(95));
         assert!(state.can_match(96));
-        assert!(state.can_match(usize::MAX));
+        assert!(state.can_match(u32::MAX));
     }
 }
