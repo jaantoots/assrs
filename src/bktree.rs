@@ -43,12 +43,13 @@ impl Tree {
             let distance = levenshtein::levenshtein(query, &node.value);
             if distance <= max_edits {
                 best = Some((node.value.as_str(), distance));
+                if distance == 0 {
+                    return best;
+                }
                 max_edits = distance - 1;
             };
-            let lower = distance - max_edits;
-            let upper = distance + max_edits;
             for (d, subtree) in node.children.iter() {
-                if lower < *d && *d < upper {
+                if d.abs_diff(distance) <= max_edits {
                     stack.push(subtree);
                 }
             }

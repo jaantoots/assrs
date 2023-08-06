@@ -3,11 +3,6 @@ use std::collections::HashMap;
 
 use crate::levenshtein::{AutomatonState, LevenshteinAutomaton};
 
-struct FindResult<'a> {
-    value: &'a str,
-    distance: u32,
-}
-
 /// Trie storing the strings to search against
 #[pyclass]
 pub struct Trie {
@@ -66,8 +61,7 @@ impl Trie {
     /// Find best match in trie for query
     pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let automaton = LevenshteinAutomaton::new(query);
-        let result = self.find_automaton(&automaton.start(), max_edits.unwrap_or(u32::MAX))?;
-        Some((result.value, result.distance))
+        self.find_automaton(&automaton.start(), max_edits.unwrap_or(u32::MAX))
     }
 }
 
@@ -112,27 +106,33 @@ impl Trie {
         )
     }
 
-    fn find_automaton(&self, state: &impl AutomatonState, max_edits: u32) -> Option<FindResult> {
+    fn find_automaton(&self, state: &impl AutomatonState, max_edits: u32) -> Option<(&str, u32)> {
         if !state.can_match(max_edits) {
             return None;
         }
-        let best = self
-            .value
-            .as_ref()
-            .map(|value| FindResult {
-                value,
-                distance: state.distance(),
-            })
-            .filter(|r| r.distance <= max_edits);
-        self.children.iter().fold(best, |best, (next, subtrie)| {
+        let mut best = None;
+        let mut max_edits = max_edits;
+        if let Some(value) = &self.value {
+            let distance = state.distance();
+            if distance <= max_edits {
+                best = Some((value.as_str(), distance));
+                if distance == 0 {
+                    return best;
+                }
+                max_edits = distance - 1;
+            }
+        }
+        for (next, subtrie) in self.children.iter() {
             // Method returns some iff best is none or distance is lower
-            subtrie
-                .find_automaton(
-                    &state.step(*next),
-                    best.as_ref().map_or(max_edits, |x| x.distance - 1),
-                )
-                .or(best)
-        })
+            if let Some(result) = subtrie.find_automaton(&state.step(*next), max_edits) {
+                best = Some(result);
+                if result.1 == 0 {
+                    return best;
+                }
+                max_edits = result.1 - 1;
+            }
+        }
+        best
     }
 }
 
