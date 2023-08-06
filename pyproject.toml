@@ -21,3 +21,9 @@ classifiers = [
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+[tool.pylint.main]
+extension-pkg-whitelist = ["assrs"]
+
+[tool.pylint.reports]
+output-format = "colorized"
