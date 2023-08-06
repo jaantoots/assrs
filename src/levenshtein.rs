@@ -126,22 +126,18 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
         match &self.state {
             General(v) => v.iter().min().unwrap() <= &max_edits,
             Bitvector { vp, vn, offset } => {
-                *offset <= max_edits
-                    || (0..)
-                        .take(self.m.len)
-                        .map(|i| 1 << i)
-                        .scan(*offset, |state, mask| {
-                            if vp & mask != 0 {
-                                *state += 1;
-                            }
-                            if vn & mask != 0 {
-                                *state -= 1;
-                            }
-                            Some(*state)
-                        })
-                        .min()
-                        .unwrap_or(*offset)
-                        <= max_edits
+                offset <= &max_edits || {
+                    let mut vpi = vp & self.m.mask;
+                    let mut nvni = !(vn & self.m.mask);
+                    while vpi != 0 && !nvni != 0 {
+                        // The minimum is preserved in this operation
+                        // Earlier positive steps cancel out later negative ones
+                        let x = nvni.wrapping_add(vpi);
+                        vpi &= x;
+                        nvni |= x;
+                    }
+                    offset - nvni.count_zeros()
+                } <= max_edits
             }
         }
     }
