@@ -10,6 +10,7 @@ pub struct LevenshteinAutomaton<'a> {
     string: &'a str,
     len: usize,
     mask: u64,
+    chars: [char; 64],
 }
 
 #[derive(Clone)]
@@ -29,10 +30,15 @@ pub struct LevenshteinAutomatonState<'a> {
 impl<'a> LevenshteinAutomaton<'a> {
     pub fn new(string: &'a str) -> Self {
         let len = string.chars().count();
+        let mut chars = ['\0'; 64];
+        for (i, c) in string.chars().take(64).enumerate() {
+            chars[i] = c;
+        }
         Self {
             string,
             len,
             mask: 1u64.checked_shl(len as u32).unwrap_or(0).wrapping_sub(1),
+            chars,
         }
     }
 
@@ -77,8 +83,8 @@ impl LevenshteinAutomatonState<'_> {
                 // Step 1: D0
                 let mut pm = 0;
                 let mut x = 1u64;
-                for c in self.m.string.chars() {
-                    if c == value {
+                for c in &self.m.chars[..self.m.len] {
+                    if c == &value {
                         pm |= x;
                     }
                     x <<= 1;
