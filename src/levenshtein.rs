@@ -1,31 +1,11 @@
 use pyo3::prelude::*;
 
-pub trait AutomatonState {
-    fn step(&self, value: char) -> Self;
-    fn distance(&self) -> u32;
-    fn can_match(&self, max_edits: u32) -> bool;
-}
-
 #[derive(Debug, Clone)]
 pub struct LevenshteinAutomaton<'a> {
     string: &'a str,
     len: usize,
-    mask: u64,
-    chars: [char; 64],
-}
-
-#[derive(Debug, Clone)]
-enum LevenshteinState {
-    General(Vec<u32>),
-    Bitvector { vp: u64, vn: u64, offset: u32 },
-}
-
-use LevenshteinState::*;
-
-#[derive(Debug, Clone)]
-pub struct LevenshteinAutomatonState<'a> {
-    m: &'a LevenshteinAutomaton<'a>,
-    state: LevenshteinState,
+    mask64: u64,
+    chars64: [char; 64],
 }
 
 impl<'a> LevenshteinAutomaton<'a> {
@@ -35,89 +15,99 @@ impl<'a> LevenshteinAutomaton<'a> {
     }
 
     fn new_assume_len(string: &'a str, len: usize) -> Self {
-        let mut chars = ['\0'; 64];
+        let mut chars64 = ['\0'; 64];
         for (i, c) in string.chars().take(64).enumerate() {
-            chars[i] = c;
+            chars64[i] = c;
         }
         Self {
             string,
             len,
-            mask: 1u64.checked_shl(len as u32).unwrap_or(0).wrapping_sub(1),
-            chars,
+            mask64: 1u64.checked_shl(len as u32).unwrap_or(0).wrapping_sub(1),
+            chars64,
         }
     }
 
-    pub fn start(&self) -> LevenshteinAutomatonState {
-        LevenshteinAutomatonState {
-            m: self,
-            state: if self.len <= 64 {
-                LevenshteinState::Bitvector {
-                    vp: self.mask,
-                    vn: 0,
-                    offset: 0,
-                }
-            } else {
-                LevenshteinState::General((0..).take(self.len + 1).collect())
-            },
+    pub fn start(&self) -> LevenshteinState {
+        if self.len <= 64 {
+            LevenshteinState::Bitvector(LevenshteinBitvector {
+                m: self,
+                vp: self.mask64,
+                vn: 0,
+                offset: 0,
+            })
+        } else {
+            LevenshteinState::General(LevenshteinGeneral {
+                m: self,
+                v: (0..).take(self.len + 1).collect(),
+            })
         }
     }
 }
 
-impl LevenshteinAutomatonState<'_> {
+#[derive(Debug, Clone)]
+pub enum LevenshteinState<'a> {
+    General(LevenshteinGeneral<'a>),
+    Bitvector(LevenshteinBitvector<'a>),
+}
+
+pub trait AutomatonState {
+    fn step_mut(&mut self, value: char);
+    fn step(&self, value: char) -> Self;
+    fn distance(&self) -> u32;
+    fn can_match(&self, max_edits: u32) -> bool;
+}
+
+impl AutomatonState for LevenshteinState<'_> {
     fn step_mut(&mut self, value: char) {
-        match self.state {
-            General(ref mut v) => {
-                let mut sub = v[0];
-                let mut add = sub + 1;
-                let mut del;
-                v[0] = add;
-                for (i, c) in self.m.string.chars().enumerate() {
-                    del = v[i + 1];
-                    sub = if c == value { sub } else { sub + 1 };
-                    add = sub.min(add + 1).min(del + 1);
-                    sub = del;
-                    v[i + 1] = add;
-                }
-            }
-            Bitvector {
-                ref mut vp,
-                ref mut vn,
-                ref mut offset,
-            } => {
-                // Myers as described by Hyyro
-                // Step 1: D0
-                let mut pm = 0;
-                let mut x = 1u64;
-                for c in &self.m.chars[..self.m.len] {
-                    if c == &value {
-                        pm |= x;
-                    }
-                    x <<= 1;
-                }
-                let d0 = (((pm & *vp).wrapping_add(*vp)) ^ *vp) | pm | *vn;
-                // Step 2-3: HP and HN
-                let mut hp = *vn | !(d0 | *vp);
-                let mut hn = d0 & *vp;
-                // Step 4-5: D[m,j]
-                // if (hp & mask) != 0 {
-                //     score += 1;
-                // }
-                // if (hn & mask) != 0 {
-                //     score -= 1;
-                // }
-                // Step 6-7: VP and VN
-                hp = (hp << 1) | 1;
-                hn <<= 1;
+        match self {
+            Self::General(s) => s.step_mut(value),
+            Self::Bitvector(s) => s.step_mut(value),
+        }
+    }
 
-                *vp = hn | !(d0 | hp);
-                *vn = hp & d0;
-                *offset += 1;
-            }
+    fn step(&self, value: char) -> Self {
+        match self {
+            Self::General(s) => Self::General(s.step(value)),
+            Self::Bitvector(s) => Self::Bitvector(s.step(value)),
+        }
+    }
+
+    fn distance(&self) -> u32 {
+        match self {
+            Self::General(s) => s.distance(),
+            Self::Bitvector(s) => s.distance(),
+        }
+    }
+
+    fn can_match(&self, max_edits: u32) -> bool {
+        match self {
+            Self::General(s) => s.can_match(max_edits),
+            Self::Bitvector(s) => s.can_match(max_edits),
         }
     }
 }
 
-impl AutomatonState for LevenshteinAutomatonState<'_> {
+#[derive(Debug, Clone)]
+pub struct LevenshteinGeneral<'a> {
+    m: &'a LevenshteinAutomaton<'a>,
+    v: Vec<u32>,
+}
+
+impl AutomatonState for LevenshteinGeneral<'_> {
+    fn step_mut(&mut self, value: char) {
+        let mut sub = self.v[0];
+        let mut add = sub + 1;
+        let mut del;
+        self.v[0] = add;
+        for (i, c) in self.m.string.chars().enumerate() {
+            del = self.v[i + 1];
+            sub = if c == value { sub } else { sub + 1 };
+            add = sub.min(add + 1).min(del + 1);
+            sub = del;
+            self.v[i + 1] = add;
+        }
+    }
+
     fn step(&self, value: char) -> Self {
         let mut new = self.clone();
         new.step_mut(value);
@@ -125,32 +115,78 @@ impl AutomatonState for LevenshteinAutomatonState<'_> {
     }
 
     fn distance(&self) -> u32 {
-        match &self.state {
-            General(v) => *v.last().unwrap(),
-            Bitvector { vp, vn, offset } => {
-                offset + (vp & self.m.mask).count_ones() - (vn & self.m.mask).count_ones()
-            }
-        }
+        *self.v.last().unwrap()
     }
 
     fn can_match(&self, max_edits: u32) -> bool {
-        match &self.state {
-            General(v) => v.iter().min().unwrap() <= &max_edits,
-            Bitvector { vp, vn, offset } => {
-                offset <= &max_edits || {
-                    let mut vpi = vp & self.m.mask;
-                    let mut nvni = !(vn & self.m.mask);
-                    while vpi != 0 && !nvni != 0 {
-                        // The minimum is preserved in this operation
-                        // Earlier positive steps cancel out later negative ones
-                        let x = nvni.wrapping_add(vpi);
-                        vpi &= x;
-                        nvni |= x;
-                    }
-                    offset - nvni.count_zeros()
-                } <= max_edits
+        self.v.iter().min().unwrap() <= &max_edits
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LevenshteinBitvector<'a> {
+    m: &'a LevenshteinAutomaton<'a>,
+    vp: u64,
+    vn: u64,
+    offset: u32,
+}
+
+impl AutomatonState for LevenshteinBitvector<'_> {
+    fn step_mut(&mut self, value: char) {
+        // Myers as described by Hyyro
+        // Step 1: D0
+        let mut pm = 0;
+        let mut x = 1u64;
+        for c in &self.m.chars64[..self.m.len] {
+            if c == &value {
+                pm |= x;
             }
+            x <<= 1;
         }
+        let d0 = (((pm & self.vp).wrapping_add(self.vp)) ^ self.vp) | pm | self.vn;
+        // Step 2-3: HP and HN
+        let mut hp = self.vn | !(d0 | self.vp);
+        let mut hn = d0 & self.vp;
+        // Step 4-5: D[m,j]
+        // if (hp & mask) != 0 {
+        //     score += 1;
+        // }
+        // if (hn & mask) != 0 {
+        //     score -= 1;
+        // }
+        // Step 6-7: VP and VN
+        hp = (hp << 1) | 1;
+        hn <<= 1;
+
+        self.vp = hn | !(d0 | hp);
+        self.vn = hp & d0;
+        self.offset += 1;
+    }
+
+    fn step(&self, value: char) -> Self {
+        let mut new = *self;
+        new.step_mut(value);
+        new
+    }
+
+    fn distance(&self) -> u32 {
+        self.offset + (self.vp & self.m.mask64).count_ones()
+            - (self.vn & self.m.mask64).count_ones()
+    }
+
+    fn can_match(&self, max_edits: u32) -> bool {
+        self.offset <= max_edits || {
+            let mut vpi = self.vp & self.m.mask64;
+            let mut nvni = !(self.vn & self.m.mask64);
+            while vpi != 0 && !nvni != 0 {
+                // The minimum is preserved in this operation
+                // Earlier positive steps cancel out later negative ones
+                let x = nvni.wrapping_add(vpi);
+                vpi &= x;
+                nvni |= x;
+            }
+            self.offset - nvni.count_zeros()
+        } <= max_edits
     }
 }
 
