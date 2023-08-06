@@ -3,18 +3,15 @@ use std::collections::HashMap;
 
 use crate::levenshtein::{AutomatonState, LevenshteinAutomaton};
 
-struct FindResult<'a> {
-    value: &'a str,
-    distance: usize,
-}
-
 /// Trie storing the strings to search against
 #[pyclass]
+#[derive(Debug, Default, Clone)]
 pub struct Trie {
     // Indicates terminal and nice when traversing
     value: Option<String>,
-    // Maybe expensive to iterate over O(capacity) rather than O(len)?
-    children: HashMap<char, Trie>,
+    // Expensive to iterate over HashMap as O(capacity) rather than O(len)
+    children_index: HashMap<char, usize>,
+    children: Vec<(char, Trie)>,
 }
 
 #[pymethods]
@@ -26,16 +23,17 @@ impl Trie {
 
     #[staticmethod]
     pub fn new() -> Self {
-        Self {
-            value: None,
-            children: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn insert(&mut self, value: String) {
         let mut node = self;
         for c in value.chars() {
-            node = node.children.entry(c).or_insert_with(Self::new);
+            let idx = node.children_index.entry(c).or_insert_with(|| {
+                node.children.push((c, Self::new()));
+                node.children.len() - 1
+            });
+            node = &mut node.children[*idx].1;
         }
         node.value = Some(value);
     }
@@ -43,7 +41,8 @@ impl Trie {
     pub fn get(&self, value: &str) -> Option<&str> {
         let mut node = self;
         for c in value.chars() {
-            node = node.children.get(&c)?;
+            let idx = node.children_index.get(&c)?;
+            node = &node.children[*idx].1;
         }
         node.value.as_deref()
     }
@@ -57,16 +56,9 @@ impl Trie {
     }
 
     /// Find best match in trie for query
-    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<(&str, usize)> {
+    pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let automaton = LevenshteinAutomaton::new(query);
-        let result = self.find_automaton(&automaton.start(), max_edits.unwrap_or(usize::MAX))?;
-        Some((result.value, result.distance))
-    }
-}
-
-impl Default for Trie {
-    fn default() -> Self {
-        Self::new()
+        self.find_automaton(&automaton.start(), max_edits.unwrap_or(u32::MAX))
     }
 }
 
@@ -101,32 +93,25 @@ impl Trie {
             self.value
                 .iter()
                 .map(|v| v.as_str())
-                .chain(self.children.values().flat_map(|x| x.iter())),
+                .chain(self.children.iter().flat_map(|x| x.1.iter())),
         )
     }
 
-    fn find_automaton(&self, state: &impl AutomatonState, max_edits: usize) -> Option<FindResult> {
-        let mut best = None;
+    fn find_automaton(&self, state: &impl AutomatonState, max_edits: u32) -> Option<(&str, u32)> {
         if !state.can_match(max_edits) {
-            return best;
+            return None;
         }
-        let distance = state.distance();
-        if distance <= max_edits {
-            best = self
-                .value
-                .as_ref()
-                .map(|k| FindResult { value: k, distance });
-        }
-        for (next, subtrie) in self.children.iter() {
+        let this = self
+            .value
+            .as_ref()
+            .map(|v| (v.as_str(), state.distance()))
+            .filter(|x| x.1 <= max_edits);
+        self.children.iter().fold(this, |best, (next, subtrie)| {
             // Method returns some iff best is none or distance is lower
-            if let Some(result) = subtrie.find_automaton(
-                &state.step(*next),
-                best.as_ref().map_or(max_edits, |x| x.distance - 1),
-            ) {
-                best = Some(result);
-            };
-        }
-        best
+            best.map_or(Some(max_edits), |x| x.1.checked_sub(1))
+                .and_then(|max_edits| subtrie.find_automaton(&state.step(*next), max_edits))
+                .or(best)
+        })
     }
 }
 

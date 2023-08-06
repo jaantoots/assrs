@@ -1,20 +1,23 @@
 use pyo3::prelude::*;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::iter::once;
 
 use crate::levenshtein;
 
+#[derive(Debug, Default, Clone)]
 struct Tree {
     value: String,
-    children: HashMap<usize, Tree>,
+    // Expensive to iterate over HashMap as O(capacity) rather than O(len)
+    children_index: HashMap<u32, usize>,
+    children: Vec<(u32, Tree)>,
 }
 
 impl Tree {
     fn new(value: String) -> Self {
         Self {
             value,
-            children: HashMap::new(),
+            ..Default::default()
         }
     }
 
@@ -23,17 +26,41 @@ impl Tree {
         if distance == 0 {
             return;
         }
-        match self.children.entry(distance) {
-            Occupied(mut entry) => entry.get_mut().insert(value),
+        match self.children_index.entry(distance) {
+            Occupied(entry) => self.children[*entry.get()].1.insert(value),
             Vacant(entry) => {
-                entry.insert(Self::new(value));
+                entry.insert(self.children.len());
+                self.children.push((distance, Self::new(value)));
             }
         };
+    }
+
+    fn find_one(&self, query: &str, max_edits: u32) -> Option<(&str, u32)> {
+        let mut best = None;
+        let mut max_edits = max_edits;
+        let mut stack = vec![self];
+        while let Some(node) = stack.pop() {
+            let distance = levenshtein::levenshtein(query, &node.value);
+            if distance <= max_edits {
+                best = Some((node.value.as_str(), distance));
+                if distance == 0 {
+                    return best;
+                }
+                max_edits = distance - 1;
+            };
+            for (d, subtree) in node.children.iter() {
+                if d.abs_diff(distance) <= max_edits {
+                    stack.push(subtree);
+                }
+            }
+        }
+        best
     }
 }
 
 /// BK-tree storing the strings to search against
 #[pyclass]
+#[derive(Debug, Default, Clone)]
 pub struct BKTree {
     tree: Option<Tree>,
 }
@@ -47,7 +74,7 @@ impl BKTree {
 
     #[staticmethod]
     pub fn new() -> Self {
-        Self { tree: None }
+        Self::default()
     }
 
     pub fn insert(&mut self, value: String) {
@@ -66,7 +93,8 @@ impl BKTree {
             if distance == 0 {
                 break;
             }
-            node = node.children.get(&distance)?;
+            let idx = node.children_index.get(&distance)?;
+            node = &node.children[*idx].1;
         }
         Some(&node.value)
     }
@@ -80,39 +108,9 @@ impl BKTree {
     }
 
     /// Find best match in BK-tree for query
-    pub fn find_one(&self, query: &str, max_edits: Option<usize>) -> Option<(&str, usize)> {
+    pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let tree = self.tree.as_ref()?;
-        let mut candidates = VecDeque::new();
-        candidates.push_back(tree);
-
-        let mut best = None;
-        let mut max_edits = max_edits.unwrap_or(usize::MAX);
-
-        while let Some(node) = candidates.pop_front() {
-            let distance = levenshtein::levenshtein(query, &node.value);
-            if distance <= max_edits {
-                max_edits = distance;
-                best = Some((node.value.as_str(), distance));
-            }
-            if !node.children.is_empty() {
-                let lower = distance - max_edits;
-                let upper = distance + max_edits;
-                candidates.extend(node.children.iter().filter_map(|(d, c)| {
-                    if lower < *d && *d < upper {
-                        Some(c)
-                    } else {
-                        None
-                    }
-                }));
-            }
-        }
-        best
-    }
-}
-
-impl Default for BKTree {
-    fn default() -> Self {
-        Self::new()
+        tree.find_one(query, max_edits.unwrap_or(u32::MAX))
     }
 }
 
@@ -143,7 +141,7 @@ impl<'a> IntoIterator for &'a Tree {
 
 impl Tree {
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-        Box::new(once(self.value.as_str()).chain(self.children.values().flat_map(|x| x.iter())))
+        Box::new(once(self.value.as_str()).chain(self.children.iter().flat_map(|x| x.1.iter())))
     }
 }
 

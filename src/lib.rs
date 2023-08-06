@@ -11,13 +11,16 @@ mod trie;
 ///
 /// Returns (choice, distance, index) or None (for empty choices)
 #[pyfunction]
-fn levenshtein_extract(query: &str, choices: Vec<&str>) -> Option<(String, usize, usize)> {
-    choices
-        .iter()
-        .map(|x| (x, levenshtein::levenshtein(query, x)))
-        .enumerate()
-        .min_by_key(|(_i, (_x, d))| *d)
-        .map(|(i, (x, d))| (x.to_string(), d, i))
+fn levenshtein_extract(query: &str, choices: Vec<&str>) -> Option<(String, u32, usize)> {
+    let mut best = None;
+    for (i, x) in choices.iter().enumerate() {
+        let distance = levenshtein::levenshtein(query, x);
+        best = Some(best.unwrap_or((distance, i, x)).min((distance, i, x)));
+        if distance == 0 {
+            break;
+        }
+    }
+    best.map(|x| (x.2.to_string(), x.0, x.1))
 }
 
 /// Approximate string searching

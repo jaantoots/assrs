@@ -66,29 +66,45 @@ up to 64 characters long.
 
 ### Performance
 
-Using [rapidfuzz][4] as a reference.
+Using [rapidfuzz][4] as a reference. Results of running `test.py` with Python
+3.11 on a Mac mini 2020 (M1, 16GB RAM).
 
 Taking a dictionary (235,976 words) as index and every 1000th as a query:
-- `Trie.find_one`: 2.28ms
-- `Trie.find_one(..., max_edits=3)`: 1.31ms
-- `BKTree.find_one`: 11.61ms
-- `BKTree.find_one(..., max_edits=3)`: 3.70ms
-- `levenshtein_extract`: 24.06ms
-- `levenshtein` in a Python loop: 36.94ms
-- `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.08ms
-- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 43.75ms
+- `assrs.Trie.find_one`: 1.00ms
+- `assrs.Trie.find_one(..., max_edits=3)`: 0.43ms
+- `assrs.BKTree.find_one`: 6.35ms
+- `assrs.BKTree.find_one(..., max_edits=3)`: 3.43ms
+- `assrs.levenshtein_extract`: 11.25ms
+- `assrs.levenshtein` in a Python loop: 31.72ms
+- `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.10ms
+- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 43.32ms
 
 However, with 100,000 random strings of length 10 as index and querying random strings:
-- `Trie.find_one`: 36.44ms
-- `Trie.find_one(..., max_edits=3)`: 15.84ms
-- `BKTree.find_one`: 15.36ms
-- `BKTree.find_one(..., max_edits=3)`: 13.79ms
-- `levenshtein_extract`: 10.89ms
-- `levenshtein` in a Python loop: 16.45ms
-- `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.29ms
-- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 17.67ms
+- `assrs.Trie.find_one`: 17.87ms
+- `assrs.Trie.find_one(..., max_edits=3)`: 5.40ms
+- `assrs.BKTree.find_one`: 11.75ms
+- `assrs.BKTree.find_one(..., max_edits=3)`: 11.67ms
+- `assrs.levenshtein_extract`: 8.61ms
+- `assrs.levenshtein` in a Python loop: 14.06ms
+- `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.21ms
+- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 17.64ms
 
+The tree based structures have a significant advantage if the index is
+relatively low entropy, like a dictionary of words from a natural language.
+However, a random set of strings causes especially poor performance for tries
+due to the excessive branching (e.g. considering that 62^3 is 238,328, it is
+highly likely that the number of explored nodes is roughly the same order of
+magnitude as the size of the index), and limits the benefits from the structure
+of the index. Instead, the overhead from traversing the tree, and extra
+distance calculations, can mean they are slower than straightforwardly
+iterating through the list of choices. Regardless, using a `Trie` with a
+`max_edits` limit remains competitive even in the worst-case scenario and
+offers a significant speedup in case of a nicer index.
 
+The difference between `assrs.levenshtein_extract` and
+`rapidfuzz.process.extractOne` (that notably disappears when the corresponding
+distance functions are called in a Python loop) seems likely attributable to
+this library not using SIMD operations.
 
 ### Limitations
 
