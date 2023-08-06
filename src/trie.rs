@@ -5,6 +5,7 @@ use crate::levenshtein::{AutomatonState, LevenshteinAutomaton};
 
 /// Trie storing the strings to search against
 #[pyclass]
+#[derive(Debug, Default, Clone)]
 pub struct Trie {
     // Indicates terminal and nice when traversing
     value: Option<String>,
@@ -22,11 +23,7 @@ impl Trie {
 
     #[staticmethod]
     pub fn new() -> Self {
-        Self {
-            value: None,
-            children_index: HashMap::new(),
-            children: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn insert(&mut self, value: String) {
@@ -62,12 +59,6 @@ impl Trie {
     pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let automaton = LevenshteinAutomaton::new(query);
         self.find_automaton(&automaton.start(), max_edits.unwrap_or(u32::MAX))
-    }
-}
-
-impl Default for Trie {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

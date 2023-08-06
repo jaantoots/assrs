@@ -5,6 +5,7 @@ use std::iter::once;
 
 use crate::levenshtein;
 
+#[derive(Debug, Default, Clone)]
 struct Tree {
     value: String,
     // Expensive to iterate over HashMap as O(capacity) rather than O(len)
@@ -16,8 +17,7 @@ impl Tree {
     fn new(value: String) -> Self {
         Self {
             value,
-            children_index: HashMap::new(),
-            children: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -60,6 +60,7 @@ impl Tree {
 
 /// BK-tree storing the strings to search against
 #[pyclass]
+#[derive(Debug, Default, Clone)]
 pub struct BKTree {
     tree: Option<Tree>,
 }
@@ -73,7 +74,7 @@ impl BKTree {
 
     #[staticmethod]
     pub fn new() -> Self {
-        Self { tree: None }
+        Self::default()
     }
 
     pub fn insert(&mut self, value: String) {
@@ -110,12 +111,6 @@ impl BKTree {
     pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let tree = self.tree.as_ref()?;
         tree.find_one(query, max_edits.unwrap_or(u32::MAX))
-    }
-}
-
-impl Default for BKTree {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

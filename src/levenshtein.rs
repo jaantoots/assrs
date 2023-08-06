@@ -6,6 +6,7 @@ pub trait AutomatonState {
     fn can_match(&self, max_edits: u32) -> bool;
 }
 
+#[derive(Debug, Clone)]
 pub struct LevenshteinAutomaton<'a> {
     string: &'a str,
     len: usize,
@@ -13,7 +14,7 @@ pub struct LevenshteinAutomaton<'a> {
     chars: [char; 64],
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum LevenshteinState {
     General(Vec<u32>),
     Bitvector { vp: u64, vn: u64, offset: u32 },
@@ -21,7 +22,7 @@ enum LevenshteinState {
 
 use LevenshteinState::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct LevenshteinAutomatonState<'a> {
     m: &'a LevenshteinAutomaton<'a>,
     state: LevenshteinState,
