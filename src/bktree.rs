@@ -36,22 +36,24 @@ impl Tree {
     }
 
     fn find_one(&self, query: &str, max_edits: u32) -> Option<(&str, u32)> {
-        let distance = levenshtein::levenshtein(query, &self.value);
-        let best = if distance <= max_edits {
-            Some((self.value.as_str(), distance))
-        } else {
-            None
-        };
-        self.children.iter().fold(best, |best, (d, subtree)| {
-            let max_edits = best.as_ref().map_or(max_edits, |x| x.1 - 1);
+        let mut best = None;
+        let mut max_edits = max_edits;
+        let mut stack = vec![self];
+        while let Some(node) = stack.pop() {
+            let distance = levenshtein::levenshtein(query, &node.value);
+            if distance <= max_edits {
+                best = Some((node.value.as_str(), distance));
+                max_edits = distance - 1;
+            };
             let lower = distance - max_edits;
             let upper = distance + max_edits;
-            if lower < *d && *d < upper {
-                subtree.find_one(query, max_edits).or(best)
-            } else {
-                best
+            for (d, subtree) in node.children.iter() {
+                if lower < *d && *d < upper {
+                    stack.push(subtree);
+                }
             }
-        })
+        }
+        best
     }
 }
 
