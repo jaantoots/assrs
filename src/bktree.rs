@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::iter::once;
 
 use crate::levenshtein;
@@ -33,6 +33,25 @@ impl Tree {
                 self.children.push((distance, Self::new(value)));
             }
         };
+    }
+
+    fn find_one(&self, query: &str, max_edits: u32) -> Option<(&str, u32)> {
+        let distance = levenshtein::levenshtein(query, &self.value);
+        let best = if distance <= max_edits {
+            Some((self.value.as_str(), distance))
+        } else {
+            None
+        };
+        self.children.iter().fold(best, |best, (d, subtree)| {
+            let max_edits = best.as_ref().map_or(max_edits, |x| x.1 - 1);
+            let lower = distance - max_edits;
+            let upper = distance + max_edits;
+            if lower < *d && *d < upper {
+                subtree.find_one(query, max_edits).or(best)
+            } else {
+                best
+            }
+        })
     }
 }
 
@@ -87,29 +106,7 @@ impl BKTree {
     /// Find best match in BK-tree for query
     pub fn find_one(&self, query: &str, max_edits: Option<u32>) -> Option<(&str, u32)> {
         let tree = self.tree.as_ref()?;
-        let mut candidates = VecDeque::new();
-        candidates.push_back(tree);
-
-        let mut best = None;
-        let mut max_edits = max_edits.unwrap_or(u32::MAX);
-
-        while let Some(node) = candidates.pop_front() {
-            let distance = levenshtein::levenshtein(query, &node.value);
-            if distance <= max_edits {
-                max_edits = distance;
-                best = Some((node.value.as_str(), distance));
-            }
-            let lower = distance - max_edits;
-            let upper = distance + max_edits;
-            candidates.extend(node.children.iter().filter_map(|(d, c)| {
-                if lower < *d && *d < upper {
-                    Some(c)
-                } else {
-                    None
-                }
-            }));
-        }
-        best
+        tree.find_one(query, max_edits.unwrap_or(u32::MAX))
     }
 }
 
