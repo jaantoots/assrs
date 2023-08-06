@@ -30,6 +30,10 @@ pub struct LevenshteinAutomatonState<'a> {
 impl<'a> LevenshteinAutomaton<'a> {
     pub fn new(string: &'a str) -> Self {
         let len = string.chars().count();
+        Self::new_assume_len(string, len)
+    }
+
+    fn new_assume_len(string: &'a str, len: usize) -> Self {
         let mut chars = ['\0'; 64];
         for (i, c) in string.chars().take(64).enumerate() {
             chars[i] = c;
@@ -158,12 +162,12 @@ pub fn levenshtein(a: &str, b: &str) -> u32 {
     let len_a = a.chars().count();
     let len_b = b.chars().count();
 
-    let (a, b) = if (len_a < len_b || len_a > 64) && len_b <= 64 {
-        (b, a)
+    let (a, len_a, b) = if (len_a < len_b || len_a > 64) && len_b <= 64 {
+        (b, len_b, a)
     } else {
-        (a, b)
+        (a, len_a, b)
     };
-    let automaton = LevenshteinAutomaton::new(a);
+    let automaton = LevenshteinAutomaton::new_assume_len(a, len_a);
     let mut state = automaton.start();
     for value in b.chars() {
         state.step_mut(value);
