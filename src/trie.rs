@@ -107,30 +107,26 @@ impl Trie {
     }
 
     fn find_automaton(&self, state: &impl AutomatonState, max_edits: u32) -> Option<(&str, u32)> {
+        let mut max_edits = max_edits;
         if !state.can_match(max_edits) {
             return None;
         }
-        let mut best = None;
-        let mut max_edits = max_edits;
-        if let Some(value) = &self.value {
-            let distance = state.distance();
-            if distance <= max_edits {
-                best = Some((value.as_str(), distance));
+        let mut best = self
+            .value
+            .as_ref()
+            .map(|v| (v.as_str(), state.distance()))
+            .filter(|x| x.1 <= max_edits);
+        for (next, subtrie) in self.children.iter() {
+            if let Some((_, distance)) = best {
                 if distance == 0 {
-                    return best;
+                    break;
                 }
                 max_edits = distance - 1;
             }
-        }
-        for (next, subtrie) in self.children.iter() {
             // Method returns some iff best is none or distance is lower
-            if let Some(result) = subtrie.find_automaton(&state.step(*next), max_edits) {
-                best = Some(result);
-                if result.1 == 0 {
-                    return best;
-                }
-                max_edits = result.1 - 1;
-            }
+            best = subtrie
+                .find_automaton(&state.step(*next), max_edits)
+                .or(best)
         }
         best
     }
