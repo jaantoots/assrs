@@ -13,7 +13,7 @@ struct FindResult<'a> {
 pub struct Trie {
     // Indicates terminal and nice when traversing
     value: Option<String>,
-    // Maybe expensive to iterate over O(capacity) rather than O(len)?
+    // Expensive to iterate over HashMap as O(capacity) rather than O(len)
     children_index: HashMap<char, usize>,
     children: Vec<(char, Trie)>,
 }

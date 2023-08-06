@@ -7,14 +7,17 @@ use crate::levenshtein;
 
 struct Tree {
     value: String,
-    children: HashMap<u32, Tree>,
+    // Expensive to iterate over HashMap as O(capacity) rather than O(len)
+    children_index: HashMap<u32, usize>,
+    children: Vec<(u32, Tree)>,
 }
 
 impl Tree {
     fn new(value: String) -> Self {
         Self {
             value,
-            children: HashMap::new(),
+            children_index: HashMap::new(),
+            children: Vec::new(),
         }
     }
 
@@ -23,10 +26,11 @@ impl Tree {
         if distance == 0 {
             return;
         }
-        match self.children.entry(distance) {
-            Occupied(mut entry) => entry.get_mut().insert(value),
+        match self.children_index.entry(distance) {
+            Occupied(entry) => self.children[*entry.get()].1.insert(value),
             Vacant(entry) => {
-                entry.insert(Self::new(value));
+                entry.insert(self.children.len());
+                self.children.push((distance, Self::new(value)));
             }
         };
     }
@@ -66,7 +70,8 @@ impl BKTree {
             if distance == 0 {
                 break;
             }
-            node = node.children.get(&distance)?;
+            let idx = node.children_index.get(&distance)?;
+            node = &node.children[*idx].1;
         }
         Some(&node.value)
     }
@@ -94,17 +99,15 @@ impl BKTree {
                 max_edits = distance;
                 best = Some((node.value.as_str(), distance));
             }
-            if !node.children.is_empty() {
-                let lower = distance - max_edits;
-                let upper = distance + max_edits;
-                candidates.extend(node.children.iter().filter_map(|(d, c)| {
-                    if lower < *d && *d < upper {
-                        Some(c)
-                    } else {
-                        None
-                    }
-                }));
-            }
+            let lower = distance - max_edits;
+            let upper = distance + max_edits;
+            candidates.extend(node.children.iter().filter_map(|(d, c)| {
+                if lower < *d && *d < upper {
+                    Some(c)
+                } else {
+                    None
+                }
+            }));
         }
         best
     }
@@ -143,7 +146,7 @@ impl<'a> IntoIterator for &'a Tree {
 
 impl Tree {
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-        Box::new(once(self.value.as_str()).chain(self.children.values().flat_map(|x| x.iter())))
+        Box::new(once(self.value.as_str()).chain(self.children.iter().flat_map(|x| x.1.iter())))
     }
 }
 
