@@ -70,24 +70,24 @@ Using [rapidfuzz][4] as a reference. Results of running `test.py` with Python
 3.11 on a Mac mini 2020 (M1, 16GB RAM).
 
 Taking a dictionary (235,976 words) as index and every 1000th as a query:
-- `assrs.Trie.find_one`: 1.00ms
+- `assrs.Trie.find_one`: 0.98ms
 - `assrs.Trie.find_one(..., max_edits=3)`: 0.43ms
-- `assrs.BKTree.find_one`: 6.35ms
-- `assrs.BKTree.find_one(..., max_edits=3)`: 3.43ms
-- `assrs.levenshtein_extract`: 11.25ms
-- `assrs.levenshtein` in a Python loop: 31.72ms
-- `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.10ms
-- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 43.32ms
+- `assrs.BKTree.find_one`: 5.54ms
+- `assrs.BKTree.find_one(..., max_edits=3)`: 2.92ms
+- `assrs.levenshtein_extract`: 9.39ms
+- `assrs.levenshtein` in a Python loop: 32.02ms
+- `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.08ms
+- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 44.20ms
 
 However, with 100,000 random strings of length 10 as index and querying random strings:
-- `assrs.Trie.find_one`: 17.87ms
-- `assrs.Trie.find_one(..., max_edits=3)`: 5.40ms
-- `assrs.BKTree.find_one`: 11.75ms
-- `assrs.BKTree.find_one(..., max_edits=3)`: 11.67ms
-- `assrs.levenshtein_extract`: 8.61ms
-- `assrs.levenshtein` in a Python loop: 14.06ms
+- `assrs.Trie.find_one`: 17.60ms
+- `assrs.Trie.find_one(..., max_edits=3)`: 5.39ms
+- `assrs.BKTree.find_one`: 10.14ms
+- `assrs.BKTree.find_one(..., max_edits=3)`: 10.14ms
+- `assrs.levenshtein_extract`: 6.81ms
+- `assrs.levenshtein` in a Python loop: 13.94ms
 - `rapidfuzz.process.extractOne(..., scorer=rapidfuzz.distance.Levenshtein.distance)`: 4.21ms
-- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 17.64ms
+- `rapidfuzz.distance.Levenshtein.distance` in a Python loop: 18.07ms
 
 The tree based structures have a significant advantage if the index is
 relatively low entropy, like a dictionary of words from a natural language.
