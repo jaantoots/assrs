@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::iter::once;
 
 use crate::levenshtein;
+use crate::levenshtein::LevenshteinAutomaton;
 
 #[derive(Debug, Default, Clone)]
 struct Tree {
@@ -39,8 +40,9 @@ impl Tree {
         let mut best = None;
         let mut max_edits = max_edits;
         let mut stack = vec![self];
+        let automaton = LevenshteinAutomaton::new(query);
         while let Some(node) = stack.pop() {
-            let distance = levenshtein::levenshtein(query, &node.value);
+            let distance = automaton.distance(&node.value);
             if distance <= max_edits {
                 best = Some((node.value.as_str(), distance));
                 if distance == 0 {

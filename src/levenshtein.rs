@@ -42,6 +42,14 @@ impl<'a> LevenshteinAutomaton<'a> {
             })
         }
     }
+
+    pub fn distance(&self, other: &str) -> u32 {
+        let mut state = self.start();
+        for value in other.chars() {
+            state.step_mut(value);
+        }
+        state.distance()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -205,11 +213,24 @@ pub fn levenshtein(a: &str, b: &str) -> u32 {
         (a, len_a, b)
     };
     let automaton = LevenshteinAutomaton::new_assume_len(a, len_a);
-    let mut state = automaton.start();
-    for value in b.chars() {
-        state.step_mut(value);
+    automaton.distance(b)
+}
+
+/// Find the best match in a list of choices
+///
+/// Returns (choice, distance, index) or None (for empty choices)
+#[pyfunction]
+pub fn levenshtein_extract(query: &str, choices: Vec<&str>) -> Option<(String, u32, usize)> {
+    let mut best = None;
+    let automaton = LevenshteinAutomaton::new(query);
+    for (i, x) in choices.iter().enumerate() {
+        let distance = automaton.distance(x);
+        best = Some(best.unwrap_or((distance, i, x)).min((distance, i, x)));
+        if distance == 0 {
+            break;
+        }
     }
-    state.distance()
+    best.map(|x| (x.2.to_string(), x.0, x.1))
 }
 
 #[cfg(test)]
@@ -231,6 +252,19 @@ mod tests {
         assert_eq!(levenshtein(&"abcde".repeat(13), &"a".repeat(65)), 52);
         assert_eq!(levenshtein(&"abcd".repeat(64), &"abcd".repeat(16)), 192);
         assert_eq!(levenshtein(&"abcd".repeat(64), &"abcd".repeat(128)), 256);
+    }
+
+    #[test]
+    fn extract() {
+        assert_eq!(levenshtein_extract("foo", vec![]), None);
+        assert_eq!(
+            levenshtein_extract("bar", vec!["bar"]),
+            Some((String::from("bar"), 0, 0))
+        );
+        assert_eq!(
+            levenshtein_extract("baz", vec!["foo", "bar"]),
+            Some((String::from("bar"), 1, 1))
+        );
     }
 
     #[test]
